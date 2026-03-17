@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Führerschein AI Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --surface: #161920;
+    --surface2: #1e2229;
+    --border: rgba(255,255,255,0.07);
+    --text: #e8eaf0;
+    --muted: #7a7f8e;
+    --accent: #4fffb0;
+    --accent2: #ff6b4a;
+    --warn: #ffd166;
+    --blue: #5b9cf6;
+    --font: 'Syne', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .hero {
+    text-align: center;
+    max-width: 680px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 12px;
+    border-radius: 100px;
+    margin-bottom: 2rem;
+    opacity: 0.85;
+  }
+
+  h1 {
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.2rem;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 1.1rem;
+    line-height: 1.7;
+    margin-bottom: 3rem;
+    font-weight: 400;
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    min-width: 110px;
+  }
+
+  .stat-num {
+    font-size: 1.8rem;
+    font-weight: 700;
+    display: block;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .stat-card.correct .stat-num { color: var(--accent); }
+  .stat-card.wrong .stat-num { color: var(--accent2); }
+  .stat-card.starred .stat-num { color: var(--warn); }
+  .stat-card.total .stat-num { color: var(--blue); }
+
+  .progress-bar-wrap {
+    background: var(--surface2);
+    border-radius: 100px;
+    height: 6px;
+    margin-bottom: 3rem;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--blue));
+    border-radius: 100px;
+    transition: width 0.8s ease;
+  }
+
+  .btn-start {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--accent);
+    color: #0d0f12;
+    font-family: var(--font);
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.9rem 2.2rem;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.15s, box-shadow 0.15s;
+    letter-spacing: 0.01em;
+  }
+
+  .btn-start:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(79,255,176,0.25);
+  }
+
+  .topic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-top: 3rem;
+    width: 100%;
+  }
+
+  .topic-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: left;
+    text-decoration: none;
+    display: block;
+  }
+
+  .topic-chip:hover {
+    border-color: rgba(79,255,176,0.3);
+    background: var(--surface2);
+  }
+
+  .topic-name { font-size: 0.85rem; font-weight: 600; display: block; color: var(--text); }
+  .topic-name-en { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); display: block; margin-top: 2px; }
+  .topic-count {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 6px;
+    display: block;
+  }
+
+  footer {
+    margin-top: 4rem;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <div class="badge">🇩🇪 Führerschein AI Trainer — Klasse B</div>
+    <h1>Theory exam.<br><span>Done right.</span></h1>
+    <p class="subtitle">Practice all official driving theory questions with bilingual explanations and AI that explains exactly why you got something wrong.</p>
+
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card total"><span class="stat-num" id="statTotal">—</span><span class="stat-label">Total</span></div>
+      <div class="stat-card correct"><span class="stat-num" id="statCorrect">0</span><span class="stat-label">Correct</span></div>
+      <div class="stat-card wrong"><span class="stat-num" id="statWrong">0</span><span class="stat-label">Wrong</span></div>
+      <div class="stat-card starred"><span class="stat-num" id="statStarred">0</span><span class="stat-label">Starred</span></div>
+    </div>
+
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+    </div>
+
+    <a href="/practice" class="btn-start">Start Practicing →</a>
+    <a href="/topics" class="btn-start" style="background:var(--surface);color:var(--text);border:1px solid var(--border);margin-left:0.75rem;">Browse Topics</a>
+
+    <div class="topic-grid" id="topicGrid"></div>
+  </div>
+
+  <footer>Built with FastAPI + Qwen3.5 + Ollama · Local · Private</footer>
+
+<script>
+async function loadStats() {
+  const res = await fetch('/api/stats');
+  const s = await res.json();
+  document.getElementById('statTotal').textContent = s.total;
+  document.getElementById('statCorrect').textContent = s.correct;
+  document.getElementById('statWrong').textContent = s.wrong;
+  document.getElementById('statStarred').textContent = s.starred;
+  const done = s.correct + s.wrong;
+  const pct = s.total > 0 ? Math.round((done / s.total) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+async function loadTopics() {
+  const res = await fetch('/api/topics');
+  const topics = await res.json();
+  const grid = document.getElementById('topicGrid');
+  topics.forEach(t => {
+    const a = document.createElement('a');
+    a.href = `/practice?topic=${encodeURIComponent(t.de)}`;
+    a.className = 'topic-chip';
+    a.innerHTML = `<span class="topic-name">${t.de}</span><span class="topic-name-en">${t.en}</span><span class="topic-count">${t.count} questions</span>`;
+    grid.appendChild(a);
+  });
+}
+
+loadStats();
+loadTopics();
+</script>
+</body>
+</html>
