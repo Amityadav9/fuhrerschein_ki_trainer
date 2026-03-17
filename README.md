@@ -16,7 +16,7 @@ AutoVio explains answers with a single static line. This app adds:
 | Layer | Choice |
 |---|---|
 | Backend | FastAPI + Python |
-| AI | Ollama (`qwen3.5:latest`) — local, free |
+| AI | Ollama (`qwen3` 8.2B) — local, free |
 | Database | PostgreSQL |
 | Frontend | Plain HTML + CSS (no build step) |
 | Package manager | `uv` |
@@ -36,9 +36,11 @@ Edit `.env` with your Postgres credentials and Ollama URL.
 
 ### 3. Start Ollama
 ```bash
-ollama pull qwen3.5:latest
+ollama pull qwen3
 ollama serve
 ```
+
+> **Why `qwen3`?** We tested `qwen3.5:latest`, `llama3.2:3b`, and `qwen3`. Smaller models (3B) hallucinate answers — they ignore the provided correct/wrong labels and make up their own. `qwen3` (8.2B params, Q4_K_M quantized, ~5.2GB) follows system prompts reliably, supports thinking mode for better reasoning, and has strong multilingual support for German/English driving theory explanations.
 
 ### 4. Run
 ```bash
@@ -84,3 +86,4 @@ View your data anytime in pgAdmin or DBeaver.
 - **Explain** — explains every correct and wrong answer with the relevant German traffic law + memory trick
 - **Chat** — ask follow-up questions per question
 - Fully context-aware for multi-answer questions
+- Chat knows which answers you selected — can tell you what you missed and why

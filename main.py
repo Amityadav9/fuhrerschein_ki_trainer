@@ -243,6 +243,7 @@ class ExplainRequest(BaseModel):
 class ChatRequest(BaseModel):
     question_id: int
     message: str
+    chosen_answers: Optional[List[str]] = None
 
 
 @app.post("/api/explain")
@@ -271,7 +272,7 @@ async def chat(body: ChatRequest):
     )
     history = list(reversed(cur.fetchall()))
 
-    reply = await chat_about_question(q, body.message, history)
+    reply = await chat_about_question(q, body.message, history, body.chosen_answers)
 
     cur.execute(
         "INSERT INTO chat_history (question_id, role, message) VALUES (%s, 'user', %s)",
