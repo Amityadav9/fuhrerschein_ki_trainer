@@ -40,6 +40,9 @@
   .star-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px; transition: color 0.15s, transform 0.15s; margin-left: 4px; }
   .star-btn:hover { transform: scale(1.2); }
   .star-btn.starred { color: var(--warn); }
+  .av-btn { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 10px; font-family: var(--mono); font-weight: 600; padding: 2px 6px; transition: all 0.15s; margin-left: 2px; letter-spacing: 0.05em; }
+  .av-btn:hover { border-color: rgba(91,156,246,0.4); color: var(--blue); }
+  .av-btn.autovio { background: rgba(91,156,246,0.12); border-color: rgba(91,156,246,0.5); color: var(--blue); }
   .q-body { padding: 1.5rem; }
 
   /* Media */
@@ -102,6 +105,11 @@
   .reset-btn:hover { background: rgba(255,107,74,0.08) !important; }
   .no-questions { text-align: center; padding: 4rem 2rem; color: var(--muted); font-family: var(--mono); }
   .loading-full { grid-column: 2; display: flex; align-items: center; justify-content: center; color: var(--muted); font-family: var(--mono); font-size: 0.9rem; gap: 8px; padding: 4rem; }
+  .input-tag { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 100px; background: rgba(255,209,102,0.08); color: var(--warn); border: 1px solid rgba(255,209,102,0.2); }
+  .number-input { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: var(--mono); font-size: 1.1rem; padding: 0.75rem 1rem; outline: none; width: 200px; transition: border-color 0.15s; text-align: center; }
+  .number-input:focus { border-color: rgba(79,255,176,0.4); }
+  .number-input:disabled { cursor: default; }
+  .number-input::placeholder { color: var(--muted); font-size: 0.82rem; }
 </style>
 </head>
 <body>
@@ -113,6 +121,7 @@
   <span style="color:var(--border)">|</span>
   <span style="font-size:0.85rem;color:var(--muted);font-family:var(--mono)">Practice · Klasse B</span>
   <span class="q-counter" id="qCounter">Loading...</span>
+  <button id="langToggle" onclick="toggleLang()" style="font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:100px;border:1px solid var(--border);background:var(--surface2);color:var(--accent);cursor:pointer;">EN</button>
 </div>
 
 <div class="filter-bar">
@@ -121,7 +130,13 @@
   <button class="filter-btn" onclick="setFilter('wrong',this)">Wrong</button>
   <button class="filter-btn" onclick="setFilter('starred',this)">Starred</button>
   <button class="filter-btn" onclick="setFilter('correct',this)">Correct</button>
+  <button class="filter-btn" onclick="setFilter('autovio',this)" style="border-color:rgba(91,156,246,0.3);color:var(--blue)">AV AutoVio</button>
   <button class="filter-btn reset-btn" onclick="resetProgress()">↺ Reset</button>
+</div>
+<div class="filter-bar" style="padding-top:0.4rem">
+  <input id="searchBar" type="text" placeholder="Search questions in English…" oninput="renderQuestions()"
+    style="flex:1;min-width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:0.82rem;padding:5px 12px;outline:none;transition:border-color 0.15s;"
+    onfocus="this.style.borderColor='rgba(79,255,176,0.4)'" onblur="this.style.borderColor='var(--border)'">
 </div>
 <div class="filter-bar" style="padding-top:0.4rem">
   <button class="filter-btn type-btn active" onclick="setTypeFilter('all',this)">Any type</button>
@@ -136,6 +151,18 @@
 </main>
 
 <script>
+let aiLang = localStorage.getItem('aiLang') || 'en';
+function toggleLang() {
+  aiLang = aiLang === 'en' ? 'de' : 'en';
+  localStorage.setItem('aiLang', aiLang);
+  document.getElementById('langToggle').textContent = aiLang.toUpperCase();
+  document.getElementById('langToggle').style.color = aiLang === 'de' ? 'var(--warn)' : 'var(--accent)';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('langToggle').textContent = aiLang.toUpperCase();
+  document.getElementById('langToggle').style.color = aiLang === 'de' ? 'var(--warn)' : 'var(--accent)';
+});
+
 let allQuestions = [];
 let currentTypeFilter = 'all';
 const selectedAnswers = {};
@@ -144,13 +171,17 @@ const topicFilter  = params.get('topic')  || '';
 const statusParam  = params.get('status') || '';
 const shuffleParam = params.get('shuffle') === '1';
 
-async function loadQuestions(filter = statusParam || 'all') {
+let currentStatusFilter = statusParam || 'all';
+
+async function loadQuestions(filter = currentStatusFilter) {
+  currentStatusFilter = filter;
   const main = document.getElementById('mainContent');
   main.innerHTML = '<div class="loading-full"><div class="dots"><span>.</span><span>.</span><span>.</span></div> Loading questions</div>';
 
   let url = '/api/questions?limit=2500';
   if (topicFilter) url += `&topic=${encodeURIComponent(topicFilter)}`;
-  if (filter !== 'all') url += `&status=${filter}`;
+  // autovio filter is client-side; other status filters are server-side
+  if (filter !== 'all' && filter !== 'autovio') url += `&status=${filter}`;
 
   const res = await fetch(url);
   allQuestions = await res.json();
@@ -167,9 +198,20 @@ function applyTypeFilter(questions) {
   return questions;
 }
 
+function applySearch(questions) {
+  const q = (document.getElementById('searchBar')?.value || '').toLowerCase().trim();
+  if (!q) return questions;
+  return questions.filter(ques =>
+    ques.question_en.toLowerCase().includes(q) ||
+    ques.answers.some(a => a.text_en.toLowerCase().includes(q))
+  );
+}
+
 function renderQuestions() {
   const main = document.getElementById('mainContent');
-  const visible = applyTypeFilter(allQuestions);
+  let filtered = allQuestions;
+  if (currentStatusFilter === 'autovio') filtered = allQuestions.filter(q => q.autovio);
+  const visible = applySearch(applyTypeFilter(filtered));
   document.getElementById('qCounter').textContent = `${visible.length} questions`;
 
   if (visible.length === 0) {
@@ -189,7 +231,7 @@ function setTypeFilter(type, btn) {
 }
 
 async function resetProgress() {
-  if (!confirm('Reset all progress? This clears correct/wrong/starred for every question.')) return;
+  if (!confirm('Reset all progress? This clears correct/wrong status. Stars and AutoVio tags are preserved.')) return;
   await fetch('/api/progress', { method: 'DELETE' });
   location.reload();
 }
@@ -198,13 +240,15 @@ function buildCard(q, num) {
   const card = document.createElement('div');
   card.className = 'question-card';
   card.id = `card-${q.id}`;
-  const isStarred = q.status === 'starred';
+  const isStarred = q.starred === true;
   selectedAnswers[q.id] = new Set();
 
   // Media tag
+  const isInput = q.type === 'input';
   const mediaTag = q.video
     ? `<span class="vid-tag">▶ video</span>`
-    : q.image ? `<span class="img-tag">⬚ image</span>` : '';
+    : q.image ? `<span class="img-tag">⬚ image</span>`
+    : isInput ? `<span class="input-tag">✎ input</span>` : '';
 
   // Media block
   let mediaBlock = '';
@@ -219,7 +263,8 @@ function buildCard(q, num) {
       <span class="q-num">#${q.id}</span>
       <span class="topic-tag">${q.topic_en}</span>
       ${mediaTag}
-      <span class="status-dot ${q.status !== 'unseen' ? q.status : ''}" id="dot-${q.id}"></span>
+      <span class="status-dot ${q.status !== 'unseen' ? q.status : (q.starred ? 'starred' : '')}" id="dot-${q.id}"></span>
+      <button class="av-btn ${q.autovio ? 'autovio' : ''}" id="av-${q.id}" onclick="toggleAutovio(${q.id})" title="Mark as seen in AutoVio">AV</button>
       <button class="star-btn ${isStarred ? 'starred' : ''}" id="star-${q.id}" onclick="toggleStar(${q.id})">★</button>
     </div>
     <div class="q-body">
@@ -227,7 +272,11 @@ function buildCard(q, num) {
       <div class="q-text-de">${q.question_de}</div>
       <div class="q-text-en">${q.question_en}</div>
       <div class="answers" id="answers-${q.id}">
-        ${q.answers.map(a => `
+        ${isInput ? `
+          <input class="number-input" id="inputans-${q.id}" type="text" placeholder="Type your answer…"
+            oninput="document.getElementById('submitbtn-${q.id}').disabled = !this.value.trim()"
+            onkeydown="if(event.key==='Enter')submitInputAnswer(${q.id})">
+        ` : q.answers.map(a => `
           <button class="answer-btn" id="ans-${q.id}-${a.id}" onclick="toggleAnswer(${q.id},'${a.id}')">
             <span class="answer-checkbox"></span>
             <span class="answer-texts">
@@ -238,7 +287,7 @@ function buildCard(q, num) {
         `).join('')}
       </div>
       <div class="submit-row">
-        <button class="btn primary" id="submitbtn-${q.id}" onclick="submitAnswers(${q.id})" disabled>Submit</button>
+        <button class="btn primary" id="submitbtn-${q.id}" onclick="${isInput ? `submitInputAnswer(${q.id})` : `submitAnswers(${q.id})`}" disabled>Submit</button>
         <span id="selcount-${q.id}" style="font-family:var(--mono);font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="result-${q.id}"></div>
@@ -253,6 +302,7 @@ function buildCard(q, num) {
       <div class="chat-input-row" id="chatrow-${q.id}" style="display:none">
         <input class="chat-input" id="chatinput-${q.id}" placeholder="Ask something..." onkeydown="if(event.key==='Enter')sendChat(${q.id})">
         <button class="btn primary" onclick="sendChat(${q.id})">Send</button>
+        <button class="btn" onclick="clearChat(${q.id})" title="Clear chat history" style="color:var(--muted);font-size:0.78rem;">✕ Clear</button>
       </div>
     </div>
   `;
@@ -320,7 +370,56 @@ async function submitAnswers(qid) {
   if (!data.correct) setTimeout(() => toggleAI(qid, 'explain', Array.from(sel)), 400);
 }
 
+async function submitInputAnswer(qid) {
+  const input = document.getElementById(`inputans-${qid}`);
+  const val = input.value.trim();
+  if (!val) return;
+
+  const q = allQuestions.find(q => q.id === qid);
+  const correctRaw = q.correct_answer;
+
+  function normalize(s) {
+    const n = parseFloat(String(s).replace(',', '.'));
+    return isNaN(n) ? String(s).toLowerCase().trim() : n;
+  }
+  const isCorrect = normalize(val) === normalize(correctRaw);
+  const status = isCorrect ? 'correct' : 'wrong';
+
+  input.disabled = true;
+  document.getElementById(`submitbtn-${qid}`).disabled = true;
+
+  const resultEl = document.getElementById(`result-${qid}`);
+  if (isCorrect) {
+    resultEl.innerHTML = `<div class="result-banner correct">✓ Correct! Answer: ${correctRaw}</div>`;
+    input.style.borderColor = 'rgba(79,255,176,0.4)';
+    input.style.color = 'var(--accent)';
+  } else {
+    resultEl.innerHTML = `<div class="result-banner wrong">✗ Wrong — correct answer: <strong>${correctRaw}</strong></div>`;
+    input.style.borderColor = 'rgba(255,107,74,0.4)';
+    input.style.color = 'var(--accent2)';
+  }
+
+  await fetch('/api/status', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qid, status}) });
+  const dot = document.getElementById(`dot-${qid}`);
+  if (dot) dot.className = `status-dot ${status}`;
+  q.status = status;
+
+  if (!isCorrect) setTimeout(() => toggleAI(qid, 'explain'), 400);
+}
+
 function restoreAnswerState(q) {
+  if (q.type === 'input') {
+    const input = document.getElementById(`inputans-${q.id}`);
+    if (input) {
+      input.value = q.correct_answer;
+      input.disabled = true;
+      input.style.borderColor = 'rgba(79,255,176,0.4)';
+      input.style.color = 'var(--accent)';
+    }
+    const submitBtn = document.getElementById(`submitbtn-${q.id}`);
+    if (submitBtn) submitBtn.disabled = true;
+    return;
+  }
   q.answers.forEach(a => {
     const btn = document.getElementById(`ans-${q.id}-${a.id}`);
     if (btn) { btn.disabled = true; if (a.correct) btn.classList.add('correct'); }
@@ -329,14 +428,22 @@ function restoreAnswerState(q) {
   if (submitBtn) submitBtn.disabled = true;
 }
 
+async function toggleAutovio(qid) {
+  const btn = document.getElementById(`av-${qid}`);
+  const res = await fetch('/api/autovio', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qid}) });
+  const data = await res.json();
+  btn.classList.toggle('autovio', data.autovio);
+  const q = allQuestions.find(q => q.id === qid);
+  if (q) q.autovio = data.autovio;
+}
+
 async function toggleStar(qid) {
   const btn = document.getElementById(`star-${qid}`);
-  const dot = document.getElementById(`dot-${qid}`);
-  const isStarred = btn.classList.contains('starred');
-  const newStatus = isStarred ? 'unseen' : 'starred';
-  await fetch('/api/status', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qid, status: newStatus}) });
-  btn.classList.toggle('starred');
-  if (dot) dot.className = `status-dot ${newStatus !== 'unseen' ? newStatus : ''}`;
+  const res = await fetch('/api/starred', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qid}) });
+  const data = await res.json();
+  btn.classList.toggle('starred', data.starred);
+  const q = allQuestions.find(q => q.id === qid);
+  if (q) q.starred = data.starred;
 }
 
 async function toggleAI(qid, mode, chosenAnswers = null) {
@@ -358,6 +465,7 @@ async function toggleAI(qid, mode, chosenAnswers = null) {
   const body = { question_id: qid };
   if (chosenAnswers) body.chosen_answers = chosenAnswers;
 
+  body.language = aiLang;
   const res = await fetch('/api/explain', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const data = await res.json();
   resp.innerHTML = `<div class="ai-response">${escapeHtml(data.explanation)}</div>`;
@@ -374,10 +482,17 @@ async function sendChat(qid) {
   hist.innerHTML += `<div class="chat-msg assistant" id="${loadingId}"><div class="role">AI</div><div class="ai-thinking"><div class="dots"><span>.</span><span>.</span><span>.</span></div></div></div>`;
   const chatBody = {question_id: qid, message: msg};
   if (selectedAnswers[qid] && selectedAnswers[qid].size > 0) chatBody.chosen_answers = Array.from(selectedAnswers[qid]);
+  chatBody.language = aiLang;
   const res = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(chatBody) });
   const data = await res.json();
   const el = document.getElementById(loadingId);
   if (el) el.innerHTML = `<div class="role">AI</div><div>${escapeHtml(data.reply)}</div>`;
+}
+
+async function clearChat(qid) {
+  await fetch(`/api/chat/${qid}`, { method: 'DELETE' });
+  document.getElementById(`chathist-${qid}`).innerHTML = '';
+  document.getElementById(`airesp-${qid}`).innerHTML = '';
 }
 
 function setFilter(f, btn) {
@@ -387,7 +502,8 @@ function setFilter(f, btn) {
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
 
 loadQuestions();

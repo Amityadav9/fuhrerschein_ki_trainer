@@ -7,31 +7,45 @@ load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3")
 
-SYSTEM_PROMPT = """You are a strict German driving theory tutor.
-The correct and incorrect answers are already determined and provided to you — do NOT second-guess them.
-Your job is ONLY to explain WHY the correct answers are right and WHY the wrong ones are wrong, using German traffic law (StVO).
-If the user challenges you or says "are you sure?" — stay firm, trust the provided answer data.
-Be concise. No apologies. No hedging.
-Always explain in clear English. Mention the relevant German traffic law or rule (StVO section).
-Use the German term alongside the English translation when introducing vocabulary.
-Format: plain text, no markdown, no bullet points unless listing multiple items."""
+SYSTEM_PROMPT_EN = """You are a strict German driving theory tutor.
+LANGUAGE RULE: Respond in English only. Even if the question contains German text, your answer must be entirely in English. German words only allowed when citing a law (e.g. StVO) or introducing a term with its English translation.
+CONTENT RULE: The CORRECT and WRONG answer labels are already determined and provided to you. They are authoritative — NEVER contradict them, NEVER override them with your own opinion. An answer labelled CORRECT is correct, full stop. An answer labelled WRONG is wrong, full stop. Your job is only to explain WHY, using German traffic law (StVO).
+FORMAT RULE: Plain text only. No markdown. No ** bold **. No # headers. No bullet points with - or *. Write in paragraphs."""
+
+SYSTEM_PROMPT_DE = """Du bist ein strenger Fahrlehrer für die deutsche Führerscheintheorie.
+SPRACHREGEL: Antworte ausschließlich auf Deutsch.
+INHALTSREGEL: Die RICHTIG und FALSCH Labels sind bereits bestimmt und verbindlich — widersprich ihnen NIEMALS. Eine als RICHTIG markierte Antwort ist richtig. Eine als FALSCH markierte Antwort ist falsch. Erkläre nur das WARUM, mit Bezug auf die StVO.
+FORMATREGEL: Nur Fließtext. Kein Markdown. Kein ** Fett **. Keine # Überschriften. Keine Aufzählungszeichen. Schreibe in Absätzen."""
 
 
 async def ask_ollama(
-    question_context: str, user_message: str, chat_history: list = None
+    question_context: str, user_message: str, chat_history: list = None, language: str = "en"
 ) -> str:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    prompt = SYSTEM_PROMPT_DE if language == "de" else SYSTEM_PROMPT_EN
+
+    # Anchor question context in system message — model follows system prompt more reliably than user message
+    lang_reminder = (
+        "REMINDER: Your response must be in English only."
+        if language != "de"
+        else "ERINNERUNG: Antworte nur auf Deutsch."
+    )
+    if question_context:
+        system_content = (
+            f"{prompt}\n\n"
+            "===QUESTION CONTEXT (answer ONLY about THIS question, nothing else)===\n"
+            f"{question_context}\n"
+            f"===\n{lang_reminder}"
+        )
+    else:
+        system_content = prompt
+
+    messages = [{"role": "system", "content": system_content}]
 
     if chat_history:
         for msg in chat_history[-6:]:
             messages.append({"role": msg["role"], "content": msg["message"]})
 
-    full_user_msg = (
-        f"{question_context}\n\nStudent question: {user_message}"
-        if question_context
-        else user_message
-    )
-    messages.append({"role": "user", "content": full_user_msg})
+    messages.append({"role": "user", "content": user_message})
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -57,57 +71,57 @@ async def ask_ollama(
         return f"AI error: {str(e)}"
 
 
-async def explain_question(question: dict, chosen_answer_ids: list = None) -> str:
+async def explain_question(question: dict, chosen_answer_ids: list = None, language: str = "en") -> str:
     chosen_ids = set(chosen_answer_ids or [])
     correct_answers = [a for a in question["answers"] if a["correct"]]
-    correct_ids = {a["id"] for a in correct_answers}
 
     def fmt(a):
         return f"{a['id']}. {a['text_de']} / {a['text_en']}"
 
     wrong_answers = [a for a in question["answers"] if not a["correct"]]
 
-    correct_str = "\n".join(f"  - {fmt(a)}" for a in correct_answers)
-    wrong_str = "\n".join(f"  - {fmt(a)}" for a in wrong_answers)
+    # Label each answer explicitly inline so the model cannot miss the CORRECT/WRONG tag
+    all_answers_labeled = "\n".join(
+        f"  [{('CORRECT' if a['correct'] else 'WRONG')}] {fmt(a)}"
+        for a in question["answers"]
+    )
+
+    correct_ids_str = ", ".join(a["id"] for a in correct_answers)
+    wrong_ids_str = ", ".join(a["id"] for a in wrong_answers) or "none"
 
     context = f"""German driving theory question:
 Topic: {question["topic"]} ({question["topic_en"]})
 Question (DE): {question["question_de"]}
 Question (EN): {question["question_en"]}
 
-CORRECT answers (already verified, do NOT question these):
-{correct_str}
+ANSWER KEY (official, authoritative — do NOT override these labels):
+{all_answers_labeled}
 
-WRONG answers (already verified, these are definitely wrong):
-{wrong_str}"""
+Summary: CORRECT = {correct_ids_str} | WRONG = {wrong_ids_str}"""
 
     if chosen_ids:
-        missed = correct_ids - chosen_ids
-        wrong_chosen = chosen_ids - correct_ids
-        correct_chosen = chosen_ids & correct_ids
-        lines = []
-        if correct_chosen:
-            lines.append(f"Student correctly selected: {', '.join(sorted(correct_chosen))}")
-        if wrong_chosen:
-            wrong_details = [fmt(a) for a in question["answers"] if a["id"] in wrong_chosen]
-            lines.append(f"Student wrongly selected: {', '.join(wrong_details)} — this was WRONG, explain why")
-        if missed:
-            missed_details = [fmt(a) for a in question["answers"] if a["id"] in missed]
-            lines.append(f"Student missed correct answer(s): {', '.join(missed_details)} — explain why these should have been selected")
-        context += "\n\n" + "\n".join(lines)
+        context += f"\n\nStudent chose: {', '.join(sorted(chosen_ids))}"
         user_msg = (
-            "Explain why each correct answer is right. "
-            "For each wrong answer the student selected, explain specifically why it is incorrect. "
-            "For each correct answer the student missed, explain why it should have been selected. "
-            "Give a memory trick at the end."
+            "Go through every answer option:\n"
+            "- For each CORRECT answer: explain WHY it is correct (StVO rule). Say whether the student chose it or missed it.\n"
+            "- For each WRONG answer: explain WHY it is wrong. Say whether the student chose it.\n"
+            "End with a memory trick."
         )
     else:
-        user_msg = "Explain why each correct answer is right and why each wrong answer is wrong. Give a memory trick to remember the rule."
+        user_msg = (
+            "Go through every answer option:\n"
+            "- For each CORRECT answer: explain WHY it is correct (StVO rule).\n"
+            "- For each WRONG answer: explain WHY it is wrong.\n"
+            "End with a memory trick."
+        )
 
-    return await ask_ollama(context, user_msg)
+    return await ask_ollama(context, user_msg, language=language)
 
 
-async def chat_about_question(question: dict, user_message: str, history: list, chosen_answer_ids: list = None) -> str:
+
+
+
+async def chat_about_question(question: dict, user_message: str, history: list, chosen_answer_ids: list = None, language: str = "en") -> str:
     correct_answers = [a for a in question["answers"] if a["correct"]]
     wrong_answers = [a for a in question["answers"] if not a["correct"]]
     correct_ids = {a["id"] for a in correct_answers}
@@ -137,4 +151,4 @@ WRONG answers (already verified, these are definitely wrong): {wrong_str}"""
             lines.append(f"Student missed correct answer(s): {', '.join(sorted(missed))}")
         context += "\n\n" + "\n".join(lines)
 
-    return await ask_ollama(context, user_message, history)
+    return await ask_ollama(context, user_message, history, language=language)

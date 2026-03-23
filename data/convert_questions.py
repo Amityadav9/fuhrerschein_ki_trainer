@@ -8,7 +8,7 @@ with open("data/questions_de.json", "r", encoding="utf-8") as f:
 
 de_lookup = {q["question_id"]: q for q in de_questions}
 
-SKIP_SUFFIXES = ['-M', '-C', '-CE', '-D', '-L', '-T']
+SKIP_SUFFIXES = ['-C', '-CE', '-D', '-L', '-T']  # -M = Media (image/video), NOT motorcycle — keep these
 SKIP_THEMES = {'Theme 2.8.'}
 
 converted = []
@@ -30,25 +30,40 @@ for idx, en_q in enumerate(en_questions):
     }
 
     en_options = en_q.get("options", [])
-    if not en_options:  # image-choice questions — skip, can't render as buttons
-        skipped += 1
-        continue
+
+    # Numeric input questions: no options, answer is a number (e.g. "1,6" or "60")
+    is_input_question = False
+    correct_answer_value = None
+    if not en_options:
+        raw_answers = en_q.get("correct_answers", [])
+        if raw_answers:
+            raw_val = raw_answers[0].get("letter", "").strip().rstrip(".")
+            # It's a numeric input if the value looks like a number (digits, comma, dot)
+            if raw_val and all(c in "0123456789,." for c in raw_val):
+                is_input_question = True
+                correct_answer_value = raw_val
+            else:
+                skipped += 1
+                continue
+        else:
+            skipped += 1
+            continue
 
     answers = []
-    de_options = de_q.get("options", en_options)
-
-    for i, en_opt in enumerate(en_options[:4]):
-        letter = answer_letters[i]
-        de_opt = de_options[i] if i < len(de_options) else en_opt
-        is_correct = en_opt["letter"].replace(".", "").strip() in correct_letters
-        answers.append(
-            {
-                "id": letter,
-                "text_de": de_opt["text"],
-                "text_en": en_opt["text"],
-                "correct": is_correct,
-            }
-        )
+    if not is_input_question:
+        de_options = de_q.get("options", en_options)
+        for i, en_opt in enumerate(en_options[:4]):
+            letter = answer_letters[i]
+            de_opt = de_options[i] if i < len(de_options) else en_opt
+            is_correct = en_opt["letter"].replace(".", "").strip() in correct_letters
+            answers.append(
+                {
+                    "id": letter,
+                    "text_de": de_opt["text"],
+                    "text_en": en_opt["text"],
+                    "correct": is_correct,
+                }
+            )
 
     topic_en = en_q.get("theme_name", "General").title()
     topic_de = de_q.get("theme_name", topic_en)
@@ -63,29 +78,33 @@ for idx, en_q in enumerate(en_questions):
     image_url = en_q["image_urls"][0] if en_q.get("image_urls") else None
     video_url = en_q["video_urls"][0] if en_q.get("video_urls") else None
 
-    converted.append(
-        {
-            "id": len(converted) + 1,
-            "question_number": qid,
-            "topic": topic_de,
-            "topic_en": topic_en,
-            "chapter": en_q.get("chapter_name", ""),
-            "question_de": de_q.get("question_text", en_q["question_text"]),
-            "question_en": en_q["question_text"],
-            "answers": answers,
-            "explanation_de": de_q.get("comment", ""),
-            "explanation_en": en_q.get("comment", ""),
-            "points": points,
-            "image": image_url,
-            "video": video_url,
-        }
-    )
+    entry = {
+        "id": len(converted) + 1,
+        "question_number": qid,
+        "topic": topic_de,
+        "topic_en": topic_en,
+        "chapter": en_q.get("chapter_name", ""),
+        "question_de": de_q.get("question_text", en_q["question_text"]),
+        "question_en": en_q["question_text"],
+        "answers": answers,
+        "explanation_de": de_q.get("comment", ""),
+        "explanation_en": en_q.get("comment", ""),
+        "points": points,
+        "image": image_url,
+        "video": video_url,
+    }
+    if is_input_question:
+        entry["type"] = "input"
+        entry["correct_answer"] = correct_answer_value
+    converted.append(entry)
 
 with open("data/questions.json", "w", encoding="utf-8") as f:
     json.dump(converted, f, ensure_ascii=False, indent=2)
 
 print(f"Converted {len(converted)} Klasse B questions")
 print(f"   Skipped {skipped} non-Klasse-B questions (truck/motorcycle/special)")
+print(f"   Multiple choice: {sum(1 for q in converted if q.get('type') != 'input')}")
+print(f"   Numeric input:   {sum(1 for q in converted if q.get('type') == 'input')}")
 print(f"   Questions with images: {sum(1 for q in converted if q['image'])}")
 print(f"   Questions with videos: {sum(1 for q in converted if q['video'])}")
 

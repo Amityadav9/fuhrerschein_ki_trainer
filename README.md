@@ -77,9 +77,10 @@ View your data anytime in pgAdmin or DBeaver.
 - **Topics** (`/topics`) — AutoVio-style topic cards with per-topic progress bar and one-click launch (All / Random / Starred / Wrong per topic)
 - **Practice** (`/practice`) — full question list
 
-### Filters
+### Filters & Search
 - By status: All · Unseen · Wrong · Starred · Correct
 - By type: Any · Video · Image · Text only · Multi-answer
+- **Search bar** — type any English keyword to filter questions instantly (searches question + answer text)
 - Reset all progress with one click
 
 ### AI
@@ -87,3 +88,4 @@ View your data anytime in pgAdmin or DBeaver.
 - **Chat** — ask follow-up questions per question
 - Fully context-aware for multi-answer questions
 - Chat knows which answers you selected — can tell you what you missed and why
+- **EN/DE language toggle** — switch AI responses between English and German (saved across sessions)

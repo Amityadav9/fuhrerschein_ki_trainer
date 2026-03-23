@@ -28,9 +28,14 @@ def init_db():
             attempts INTEGER DEFAULT 0,
             correct_count INTEGER DEFAULT 0,
             last_seen TIMESTAMP DEFAULT NOW(),
-            notes TEXT
+            notes TEXT,
+            autovio BOOLEAN DEFAULT FALSE
         );
     """)
+
+    # Add columns if they don't exist (for existing DBs)
+    cur.execute("ALTER TABLE progress ADD COLUMN IF NOT EXISTS autovio BOOLEAN DEFAULT FALSE;")
+    cur.execute("ALTER TABLE progress ADD COLUMN IF NOT EXISTS starred BOOLEAN DEFAULT FALSE;")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS chat_history (

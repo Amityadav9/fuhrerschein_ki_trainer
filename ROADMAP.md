@@ -26,6 +26,8 @@ Build the smartest driving theory practice tool that actually understands how yo
 - [x] Topic/lecture grouped view — AutoVio-style cards with per-topic progress bar
 - [x] Random/shuffle mode per topic
 - [x] One-click launch by topic: All / Random / Starred / Wrong
+- [x] English search bar — instant keyword filter across questions and answers
+- [x] EN/DE language toggle for AI responses (saved to localStorage)
 
 ---
 
@@ -79,5 +81,5 @@ Phase 4: FastAPI WebSocket — real-time AI streaming
 
 - Dataset sourced from vyper0016/theorie-pruefung-trainer (clickclickdrive.de) — professional bilingual translations, not AI-generated
 - pgvector already installed locally — Phase 3 needs no new infrastructure
-- Ollama model is swappable via `.env` — `qwen3.5:latest` default, `gemma3:12b` also works well
+- Ollama model is swappable via `.env` — `qwen3:latest` preferred (5.2GB, follows instructions reliably), `qwen3.5:latest` also available
 - App is local-first by design — no cloud, no subscription, no data leaving your machine
