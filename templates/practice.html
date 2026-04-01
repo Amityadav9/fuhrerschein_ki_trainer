@@ -266,6 +266,7 @@ function buildCard(q, num) {
       <span class="status-dot ${q.status !== 'unseen' ? q.status : (q.starred ? 'starred' : '')}" id="dot-${q.id}"></span>
       <button class="av-btn ${q.autovio ? 'autovio' : ''}" id="av-${q.id}" onclick="toggleAutovio(${q.id})" title="Mark as seen in AutoVio">AV</button>
       <button class="star-btn ${isStarred ? 'starred' : ''}" id="star-${q.id}" onclick="toggleStar(${q.id})">★</button>
+      <button class="av-btn" onclick="speakQuestion(${q.id})" title="Read aloud">🔊</button>
     </div>
     <div class="q-body">
       ${mediaBlock}
@@ -504,6 +505,24 @@ function setFilter(f, btn) {
 function escapeHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function speakQuestion(qid) {
+  window.speechSynthesis.cancel();
+  const q = allQuestions.find(q => q.id === qid);
+  if (!q) return;
+
+  const isDE = aiLang === 'de';
+  const lang = isDE ? 'de-DE' : 'en-US';
+  const lines = [isDE ? q.question_de : q.question_en];
+  q.answers.forEach(a => lines.push(isDE ? a.text_de : a.text_en));
+
+  lines.forEach(text => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    u.rate = 0.95;
+    window.speechSynthesis.speak(u);
+  });
 }
 
 loadQuestions();
